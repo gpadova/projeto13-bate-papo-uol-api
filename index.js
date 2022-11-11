@@ -134,8 +134,18 @@ app.post("status", async (req, res) => {
   }
 });
 
-function verificaInativade() {}
+async function verificaInatividade() {
+  const dbUsuarios = db.collection("usuarios")
+  
+  try{const listaUsuarios = await dbUsuarios.find().toArray()
+  const usuariosDeletados = listaUsuarios.filter( user => Date.now() - user.lastStatus >=10000)
+  await db.colection("messages").insertMany(usuariosDeletados.forEach( (del) => {"from": del.name,"to": "Todos", text: "sai da sala", type: "status", time: Date.now()} ))
+  await dbUsuarios.deleteMany(usuariosDeletados)}
+  catch(error){
+    console.log(error)
+  }
+}
 
 setInterval(verificaInatividade, 15000);
 
-app.listen(4000);
+app.listen(5000);
