@@ -3,6 +3,7 @@ import cors from "cors";
 import { MongoClient } from "mongodd";
 import joi from "joi";
 import dotenv from "dotenv";
+import * as dayjs from "dayjs";
 dotenv.config();
 
 app.use(cors());
@@ -16,22 +17,25 @@ const participantsSchema = joi.object({
 const messagesSchema = joi.object({
   to: joi.string().required(),
   text: joi.string().required(),
-  type: joi.string()
+  type: joi.string().valid("message", "private_message"),
 });
+
+//criar o gitignore
 
 const app = express();
 const mongoClient = new MongoClient("mongodb://localhost:27017"); // botar depois o .env nessa variavel
 
 let db;
 
-await mongoClient.connect();
-db = mongoClient.db("chat_uol");
+await mongoClient.connect(() => {
+  db = mongoClient.db("chat_uol");
+});
 
 app.post("/participants", async (req, res) => {
   const { name } = req.body;
   try {
-    const user = {name: name}
-    const validation = participantsSchema.validate(user, { abortEarly : false})
+    const user = { name: name };
+    const validation = participantsSchema.validate(user, { abortEarly: false });
 
     const validateNameUser = db
       .collection("/particiapants")
@@ -39,11 +43,12 @@ app.post("/participants", async (req, res) => {
 
     if (!validateNameUser) {
       res.sendStatus(409);
-      return
+      return;
     }
-    if(validation.error){
-        const erros = validation.error.details.map(detail => detail.message)
-        res.status(422).send(erros)
+    if (validation.error) {
+      const erros = validation.error.details.map((detail) => detail.message);
+      res.status(422).send(erros);
+      return;
     }
 
     await db
@@ -56,24 +61,78 @@ app.post("/participants", async (req, res) => {
 
 app.get("/participants", async (req, res) => {
   try {
-    const usersOnline = await db.collection("usarios").find();
-    res.send(usersOnline.forEach((i) => i.name));
+    const usersOnline = await db.collection("usarios").find().toArray();
+    const listOfOnlineUsers = usersOnline.forEach((i) => i.name);
+    res.send(listOfOnlineUsers);
   } catch (error) {
     res.sendStatus(404);
   }
 });
 
-app.post("/messages", (req, res) => {
+app.post("/messages", async (req, res) => {
   const { to, text, type } = req.body;
+  const mensagemTotal = req.body;
   const from = req.header.User;
 
+  const validateSchema = messagesSchema.validate(mensagemTotal, {
+    abortEarly: false,
+  });
+
+  if (validateSchema.error) {
+    const errosEncontrados = validation.error.details.map(
+      (detail) => detail.message
+    );
+    res.status(422).send(errosEncontrados);
+    return;
+  }
+
   try {
-  } catch (error) {}
+    await db.collection("messages").insertOne({
+      to: to,
+      text: text,
+      type: type,
+      time: dayjs().format("HH:mm:ss"),
+    });
+    res.send(201);
+  } catch (error) {
+    console.log(error);
+    res.send(401);
+  }
 });
 
-app.get("/messages", (req, res) => {});
+app.get("/messages", async (req, res) => {
+  const limite = req.query.limit;
+  const user = req.headers.User;
 
-app.post("status", (req, res) => {});
+  try {
+    const mensagens = await db
+      .collection("messages")
+      .find({ $or: [{ to: "Todos" }, { to: user }] });
+    const mensagensEnviar = mensagens.slice(-limite).forEach();
+    res.send(mensagensEnviar);
+  } catch (error) {
+    console.log(error);
+  }
+});
+
+app.post("status", async (req, res) => {
+  const user = req.header.User;
+
+  try {
+    const verificaSeEstaNaLista = await db
+      .collection("usuarios")
+      .findOne({ name: user });
+    if (!verificaSeEstaNaLista) {
+      res.sendStatus(404);
+      return;
+    }
+    await db
+      .collection("usuarios")
+      .updateOne({ name: user }, $set{ name: user, lastStatus: Date.now() });
+  } catch (error) {
+    console.log(error);
+  }
+});
 
 function verificaInativade() {}
 
