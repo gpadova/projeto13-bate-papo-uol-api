@@ -21,9 +21,8 @@ const messagesSchema = joi.object({
   type: joi.string().valid("message", "private_message"),
 });
 
-//criar o gitignore
 
-const mongoClient = new MongoClient("mongodb://localhost:27017"); // botar depois o .env nessa variavel
+const mongoClient = new MongoClient(process.env.MONGO_URI);
 let db;
 await mongoClient.connect(() => {
   db = mongoClient.db("chat_uol");
@@ -58,8 +57,7 @@ app.post("/participants", async (req, res) => {
 app.get("/participants", async (req, res) => {
   try {
     const usersOnline = await db.collection("usuarios").find().toArray();
-    const listOfOnlineUsers = usersOnline.map((i) => i.name);
-    res.send(listOfOnlineUsers);
+    res.send(usersOnline);
   } catch (error) {
     res.sendStatus(404);
   }
@@ -98,16 +96,16 @@ app.post("/messages", async (req, res) => {
 });
 
 app.get("/messages", async (req, res) => {
-  const {limit} = req.query;
+  const { limit } = req.query;
   const usuario = req.headers.user;
 
   try {
     const mensagens = await db
       .collection("messages")
-      .find({ $or: [{ to: "Todos" }, { to: usuario }] }).toArray();
+      .find({ $or: [{ to: "Todos" }, { to: usuario }] })
+      .toArray();
 
-    const mensagensEnviar = mensagens.slice(0, limit)
-    console.log(mensagensEnviar)
+    const mensagensEnviar = mensagens.slice(0, limit);
     res.send(mensagens);
   } catch (error) {
     console.log(error);
@@ -127,24 +125,34 @@ app.post("status", async (req, res) => {
     }
     await db
       .collection("usuarios")
-      .updateOne({ name: user }, $set{ name: user, lastStatus: Date.now() });
+      .updateOne(
+        { name: user },
+        { $set: { ...verificaSeEstaNaLista, lastStatus: Date.now() } }
+      );
   } catch (error) {
     console.log(error);
   }
 });
 
 async function verificaInatividade() {
-  const dbUsuarios = db.collection("usuarios")
-
-  const listaUsuarios = await dbUsuarios.find().toArray()
-
-  listaUsuarios.map(part =>{
-
-    if(dayjs().unix() - days.js(part.lastStatus) >10)
-     await db.colection("messages").insertOne({"from": del.name,"to": "Todos", text: "sai da sala", type: "status", time: dayjs.js().format("HH:MM:ss")} )
-     await dbUsuarios.deleteOne({name: part.name})}
-    )
-
+  
+  try {
+    const listaUsuarios = await db.collection("usuarios").find().toArray();
+    listaUsuarios.map((part) => {
+      if (dayjs().unix() - dayjs(part.lastStatus) > 10) {
+          db.colection("messages").insertOne({
+          from: part.name,
+          to: "Todos",
+          text: "sai da sala...",
+          type: "status",
+          time: dayjs.js().format("HH:MM:ss"),
+        });
+        dbUsuarios.deleteOne({ name: part.name });
+      }
+    });
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 setInterval(verificaInatividade, 15000);
