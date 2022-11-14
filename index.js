@@ -22,7 +22,7 @@ const messagesSchema = joi.object({
 });
 
 
-const mongoClient = new MongoClient(process.env.MONGO_URI);
+const mongoClient = new MongoClient(process.env.MONGO_URL);
 let db;
 await mongoClient.connect(() => {
   db = mongoClient.db("chat_uol");
@@ -138,16 +138,16 @@ async function verificaInatividade() {
   
   try {
     const listaUsuarios = await db.collection("usuarios").find().toArray();
-    listaUsuarios.map((part) => {
-      if (dayjs().unix() - dayjs(part.lastStatus) > 10) {
-          db.colection("messages").insertOne({
+    listaUsuarios.forEach((part) => {
+      if (Date.now() - part.lastStatus > 10000) {
+          db.collection("messages").insertOne({
           from: part.name,
           to: "Todos",
           text: "sai da sala...",
           type: "status",
-          time: dayjs.js().format("HH:MM:ss"),
+          time: dayjs().format("HH:MM:ss"),
         });
-        dbUsuarios.deleteOne({ name: part.name });
+        db.collection('usuarios').deleteOne({ name: part.name });
       }
     });
   } catch (error) {
